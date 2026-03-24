@@ -52,7 +52,30 @@ int main() {
       train_data(row_idx, 4) = img_data[img_idx + 2] / 255.0f;
     }
   }
+
   stbi_image_free(img_data);
 
+  std::vector<size_t> arch = {2, 64, 64, 3};
+  nn::NeuralNetwork compressor(arch);
+  compressor.randomize(-0.5f, 0.5f);
+
+  nn::Batch batch;
+  size_t epochs = 500;
+  float learning_rate = 0.01f;
+
+  std::cout << "Starting compression...\n";
+
+  for (size_t i = 0; i < epochs; ++i) {
+    // Forward Pass -> Cost -> Backprop
+    batch.process(train_data.rows, compressor, train_data, learning_rate,
+                  nn::Activation::Relu, nn::Activation::Sigmoid);
+    // ReLU is used for the hidden layers
+    // Sigmoid is used for the final output
+    if (i % 100 == 0) {
+      std::cout << "Epoch: " << i << " | Cost: " << batch.cost << "\n";
+    }
+  }
+
+  std::cout << "Compression complete!\n";
   return 0;
 }
