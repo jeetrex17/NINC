@@ -77,5 +77,39 @@ int main() {
   }
 
   std::cout << "Compression complete!\n";
+
+  compressor.save("test.ninc");
+  std::vector<unsigned char> output_pixels(width * height * 3);
+
+  nn::Matrix input(1, 2, 0.0f);
+
+  for (size_t j = 0; j < height; j++) {
+    for (size_t i = 0; i < width; i++) {
+      compressor.get_input()(0, 0) = (float)i / (width - 1);
+      compressor.get_input()(0, 1) = (float)j / (height - 1);
+
+      compressor.forward(nn::Activation::Relu, nn::Activation::Sigmoid);
+
+      size_t img_idx = (j * width + i) * 3;
+
+      // We multiply by 255.0f to go from 0.0-1.0 back to 0-255
+      output_pixels[img_idx + 0] =
+          (unsigned char)(compressor.get_output()(0, 0) * 255.0f); // R
+      output_pixels[img_idx + 1] =
+          (unsigned char)(compressor.get_output()(0, 1) * 255.0f); // G
+      output_pixels[img_idx + 2] =
+          (unsigned char)(compressor.get_output()(0, 2) * 255.0f); // B
+    }
+  }
+
+  stbi_write_png("output.png", width, height, 3, output_pixels.data(),
+                 width * 3);
+
+  std::cout << "Neural reconstruction saved to output.png!\n";
+
+  stbi_write_png("output.png", width, height, 3, output_pixels.data(),
+                 width * 3);
+
+  std::cout << "Neural reconstruction saved to output.png!\n";
   return 0;
 }
