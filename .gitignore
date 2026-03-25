@@ -1,0 +1,32 @@
+  # macOS
+  .DS_Store
+
+  # Editors
+  .vscode/
+  .idea/
+  *.swp
+  *.swo
+
+  # Build directories
+  build/
+  cmake-build-*/
+  out/
+  bin/
+
+  # C/C++ build artifacts
+  *.o
+  *.obj
+  *.a
+  *.lib
+  *.so
+  *.dylib
+  *.dll
+  *.exe
+
+  # Generated binaries / model outputs
+  ninc
+  *.ninc
+
+  # Generated images
+  test.png
+  reconstructed.png
