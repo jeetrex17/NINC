@@ -1,5 +1,6 @@
 #include "compress.h"
 
+#include <cassert>
 #include <iostream>
 
 #include "../Headers/nn.h"
@@ -22,6 +23,37 @@ nn::Matrix BuildPatchTrainingData(const PatchSet& patch_set) {
   }
 
   return train_data;
+}
+
+std::vector<std::vector<float>> ExtractLatentCodes(nn::NeuralNetwork& autoencoder,
+                                                   const PatchSet& patch_set,
+                                                   nn::Activation hidden_act,
+                                                   nn::Activation output_act) {
+  assert(!autoencoder.as.empty());
+
+  const size_t latent_layer_idx = autoencoder.as.size() / 2;
+  const size_t patch_dim =
+      static_cast<size_t>(patch_set.patch_size) * patch_set.patch_size * patch_set.channels;
+  const size_t latent_dim = autoencoder.as[latent_layer_idx].cols;
+  std::vector<std::vector<float>> latent_codes(patch_set.patches.size(),
+                                               std::vector<float>(latent_dim, 0.0f));
+
+  for (size_t patch_idx = 0; patch_idx < patch_set.patches.size(); ++patch_idx) {
+    const auto& patch = patch_set.patches[patch_idx];
+
+    for (size_t value_idx = 0; value_idx < patch_dim; ++value_idx) {
+      autoencoder.get_input()(0, value_idx) = patch[value_idx];
+    }
+
+    autoencoder.forward(hidden_act, output_act);
+
+    const nn::Matrix& latent = autoencoder.as[latent_layer_idx];
+    for (size_t value_idx = 0; value_idx < latent_dim; ++value_idx) {
+      latent_codes[patch_idx][value_idx] = latent(0, value_idx);
+    }
+  }
+
+  return latent_codes;
 }
 
 std::vector<std::vector<float>> DecodePatches(nn::NeuralNetwork& autoencoder,
@@ -95,6 +127,10 @@ int RunCompress(const std::string& input_path,
       std::cout << "Epoch: " << epoch << " | Cost: " << batch.cost << std::endl;
     }
   }
+
+  const auto latent_codes = ExtractLatentCodes(autoencoder, patch_set, hidden_act, output_act);
+  std::cout << "Latent code count: " << latent_codes.size() << "\n";
+  std::cout << "Latent size: " << (latent_codes.empty() ? 0 : latent_codes.front().size()) << "\n";
 
   const auto decoded_patches = DecodePatches(autoencoder, patch_set, hidden_act, output_act);
   const Image output = ReconstructFromPatches(patch_set, decoded_patches);
