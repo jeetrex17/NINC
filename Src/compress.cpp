@@ -9,8 +9,8 @@
 namespace {
 
 nn::Matrix BuildPatchTrainingData(const PatchSet& patch_set) {
-  const size_t patch_dim = static_cast<size_t>(patch_set.patch_size) *
-                           patch_set.patch_size * patch_set.channels;
+  const size_t patch_dim =
+      static_cast<size_t>(patch_set.patch_size) * patch_set.patch_size * patch_set.channels;
   nn::Matrix train_data(patch_set.patches.size(), patch_dim * 2, 0.0f);
 
   for (size_t patch_idx = 0; patch_idx < patch_set.patches.size(); ++patch_idx) {
@@ -24,13 +24,14 @@ nn::Matrix BuildPatchTrainingData(const PatchSet& patch_set) {
   return train_data;
 }
 
-std::vector<std::vector<float>> DecodePatches(
-    nn::NeuralNetwork& autoencoder, const PatchSet& patch_set,
-    nn::Activation hidden_act, nn::Activation output_act) {
-  const size_t patch_dim = static_cast<size_t>(patch_set.patch_size) *
-                           patch_set.patch_size * patch_set.channels;
-  std::vector<std::vector<float>> decoded_patches(
-      patch_set.patches.size(), std::vector<float>(patch_dim, 0.0f));
+std::vector<std::vector<float>> DecodePatches(nn::NeuralNetwork& autoencoder,
+                                              const PatchSet& patch_set,
+                                              nn::Activation hidden_act,
+                                              nn::Activation output_act) {
+  const size_t patch_dim =
+      static_cast<size_t>(patch_set.patch_size) * patch_set.patch_size * patch_set.channels;
+  std::vector<std::vector<float>> decoded_patches(patch_set.patches.size(),
+                                                  std::vector<float>(patch_dim, 0.0f));
 
   for (size_t patch_idx = 0; patch_idx < patch_set.patches.size(); ++patch_idx) {
     const auto& patch = patch_set.patches[patch_idx];
@@ -42,17 +43,17 @@ std::vector<std::vector<float>> DecodePatches(
     autoencoder.forward(hidden_act, output_act);
 
     for (size_t value_idx = 0; value_idx < patch_dim; ++value_idx) {
-      decoded_patches[patch_idx][value_idx] =
-          autoencoder.get_output()(0, value_idx);
+      decoded_patches[patch_idx][value_idx] = autoencoder.get_output()(0, value_idx);
     }
   }
 
   return decoded_patches;
 }
 
-}  // namespace
+} // namespace
 
-int RunCompress(const std::string& input_path, const std::string& model_path,
+int RunCompress(const std::string& input_path,
+                const std::string& model_path,
                 const std::string& output_path) {
   (void)model_path;
 
@@ -68,13 +69,11 @@ int RunCompress(const std::string& input_path, const std::string& model_path,
   std::cout << "Total Pixels: " << (image.width * image.height) << "\n";
 
   const PatchSet patch_set = ExtractPatches(image, 8, 4);
-  const size_t patch_dim = static_cast<size_t>(patch_set.patch_size) *
-                           patch_set.patch_size * patch_set.channels;
+  const size_t patch_dim =
+      static_cast<size_t>(patch_set.patch_size) * patch_set.patch_size * patch_set.channels;
   std::cout << "Patch autoencoder training...\n";
-  std::cout << "Padded Size: " << patch_set.padded_width << "x"
-            << patch_set.padded_height << "\n";
-  std::cout << "Patch Size: " << patch_set.patch_size
-            << " | Stride: " << patch_set.stride << "\n";
+  std::cout << "Padded Size: " << patch_set.padded_width << "x" << patch_set.padded_height << "\n";
+  std::cout << "Patch Size: " << patch_set.patch_size << " | Stride: " << patch_set.stride << "\n";
   std::cout << "Patch Count: " << patch_set.patches.size() << "\n";
   std::cout << "Patch Dim: " << patch_dim << "\n";
 
@@ -91,23 +90,19 @@ int RunCompress(const std::string& input_path, const std::string& model_path,
   constexpr nn::Activation output_act = nn::Activation::Sigmoid;
 
   for (size_t epoch = 0; epoch < epochs; ++epoch) {
-    batch.process(train_data.rows, autoencoder, train_data, learning_rate,
-                  hidden_act, output_act);
+    batch.process(train_data.rows, autoencoder, train_data, learning_rate, hidden_act, output_act);
     if (epoch % 25 == 0 || epoch + 1 == epochs) {
-      std::cout << "Epoch: " << epoch << " | Cost: " << batch.cost
-                << std::endl;
+      std::cout << "Epoch: " << epoch << " | Cost: " << batch.cost << std::endl;
     }
   }
 
-  const auto decoded_patches =
-      DecodePatches(autoencoder, patch_set, hidden_act, output_act);
+  const auto decoded_patches = DecodePatches(autoencoder, patch_set, hidden_act, output_act);
   const Image output = ReconstructFromPatches(patch_set, decoded_patches);
   if (!SavePNG(output_path, output)) {
     std::cerr << "Error: Could not save " << output_path << "!" << std::endl;
     return 1;
   }
 
-  std::cout << "Patch autoencoder reconstruction saved to " << output_path
-            << "!\n";
+  std::cout << "Patch autoencoder reconstruction saved to " << output_path << "!\n";
   return 0;
 }

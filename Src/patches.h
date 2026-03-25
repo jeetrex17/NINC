@@ -18,7 +18,6 @@ struct PatchSet {
   std::vector<int> ys;
 };
 
-PatchSet ExtractPatches(const Image &image, int patch_size = 8, int stride = 4);
-Image ReconstructFromPatches(
-    const PatchSet &patch_set,
-    const std::vector<std::vector<float>> &decoded_patches);
+PatchSet ExtractPatches(const Image& image, int patch_size = 8, int stride = 4);
+Image ReconstructFromPatches(const PatchSet& patch_set,
+                             const std::vector<std::vector<float>>& decoded_patches);

@@ -25,10 +25,18 @@ enum class Activation { Sigmoid, Relu, Tanh, Sin };
 #define NN_ACT nn::Activation::Sigmoid
 #endif
 
-inline float Sigmoid(float x) { return (1 / (1 + exp(-x))); }
-inline float Relu(float x) { return std::max(0.0f, x); }
-inline float Tanh(float x) { return std::tanh(x); }
-inline float Sin(float x) { return std::sin(x); }
+inline float Sigmoid(float x) {
+  return (1 / (1 + exp(-x)));
+}
+inline float Relu(float x) {
+  return std::max(0.0f, x);
+}
+inline float Tanh(float x) {
+  return std::tanh(x);
+}
+inline float Sin(float x) {
+  return std::sin(x);
+}
 
 // Activation Function
 inline float Actf(float x, Activation act = NN_ACT) {
@@ -70,13 +78,12 @@ inline float rand_float(float low, float high) {
 }
 
 class Matrix {
- public:
+public:
   size_t rows;
   size_t cols;
   std::vector<float> data;
 
-  Matrix(size_t r = 0, size_t c = 0, float d = 0.0f)
-      : rows(r), cols(c), data(r * c, d) {}
+  Matrix(size_t r = 0, size_t c = 0, float d = 0.0f) : rows(r), cols(c), data(r * c, d) {}
 
   float& operator()(size_t i, size_t j) {
     assert(i < this->rows && j < this->cols);
@@ -89,7 +96,9 @@ class Matrix {
     return data[i * cols + j];
   }
 
-  void fill(float x) { std::fill(data.begin(), data.end(), x); }
+  void fill(float x) {
+    std::fill(data.begin(), data.end(), x);
+  }
 
   void randomize(float low, float high) {
     for (auto& d : data) {
@@ -139,7 +148,8 @@ class Matrix {
     Matrix dst(a.rows, b.cols, 0.0f);
 
     unsigned int num_threads = std::thread::hardware_concurrency();
-    if (num_threads == 0) num_threads = 4;  // Fallback just in case
+    if (num_threads == 0)
+      num_threads = 4; // Fallback just in case
 
     std::vector<std::thread> threads;
 
@@ -149,11 +159,12 @@ class Matrix {
       size_t start_row = t * chunk_size;
       size_t end_row = std::min(start_row + chunk_size, dst.rows);
 
-      if (start_row >= dst.rows) break;
+      if (start_row >= dst.rows)
+        break;
 
       threads.emplace_back([start_row, end_row, &a, &b, &dst]() {
         for (size_t i = start_row; i < end_row; ++i) {
-          //Loop order i -> k -> j is highly optimized for CPU Cache
+          // Loop order i -> k -> j is highly optimized for CPU Cache
           for (size_t k = 0; k < a.cols; ++k) {
             float a_ik = a(i, k);
             for (size_t j = 0; j < dst.cols; ++j) {
@@ -229,7 +240,7 @@ class Matrix {
       }
 
       if (std::abs(aug(p, p)) < EPS) {
-        return Matrix();  // not invertible
+        return Matrix(); // not invertible
       }
 
       float pivot = aug(p, p);
@@ -271,19 +282,18 @@ class Matrix {
 };
 
 class NeuralNetwork {
- public:
-  std::vector<size_t>
-      arch;                // Architecture it stores number of neuros per layer
-  std::vector<Matrix> ws;  // Weights
-  std::vector<Matrix> bs;  // Biases
-  std::vector<Matrix> as;  // Activations
-  std::vector<Matrix> zs;  // Pre-activations (before activation function)
+public:
+  std::vector<size_t> arch; // Architecture it stores number of neuros per layer
+  std::vector<Matrix> ws;   // Weights
+  std::vector<Matrix> bs;   // Biases
+  std::vector<Matrix> as;   // Activations
+  std::vector<Matrix> zs;   // Pre-activations (before activation function)
 
   NeuralNetwork(const std::vector<size_t>& architecture) : arch(architecture) {
     assert(arch.size() > 0);
 
-    as.emplace_back(1, arch[0]);  // input layer for example if arch is {2 , 3 ,
-                                  // 1} then input matix should be 1x2
+    as.emplace_back(1, arch[0]); // input layer for example if arch is {2 , 3 ,
+                                 // 1} then input matix should be 1x2
     for (size_t i = 1; i < arch.size(); ++i) {
       ws.emplace_back(arch[i - 1], arch[i]);
       bs.emplace_back(1, arch[i]);
@@ -292,10 +302,16 @@ class NeuralNetwork {
     }
   }
 
-  Matrix& get_input() { return as.front(); }
-  Matrix& get_output() { return as.back(); }
+  Matrix& get_input() {
+    return as.front();
+  }
+  Matrix& get_output() {
+    return as.back();
+  }
 
-  const Matrix& get_output() const { return as.back(); }
+  const Matrix& get_output() const {
+    return as.back();
+  }
   void zero() {
     for (auto& a : as) {
       a.fill(0.0f);
@@ -334,21 +350,18 @@ class NeuralNetwork {
 
     outFile.write(reinterpret_cast<const char*>(&arch_size), sizeof(arch_size));
 
-    outFile.write(reinterpret_cast<const char*>(arch.data()),
-                  arch.size() * sizeof(size_t));
+    outFile.write(reinterpret_cast<const char*>(arch.data()), arch.size() * sizeof(size_t));
 
     for (const auto& w : ws) {
       outFile.write(reinterpret_cast<const char*>(&w.rows), sizeof(w.rows));
       outFile.write(reinterpret_cast<const char*>(&w.cols), sizeof(w.cols));
-      outFile.write(reinterpret_cast<const char*>(w.data.data()),
-                    w.data.size() * sizeof(float));
+      outFile.write(reinterpret_cast<const char*>(w.data.data()), w.data.size() * sizeof(float));
     }
 
     for (const auto& b : bs) {
       outFile.write(reinterpret_cast<const char*>(&b.rows), sizeof(b.rows));
       outFile.write(reinterpret_cast<const char*>(&b.cols), sizeof(b.cols));
-      outFile.write(reinterpret_cast<const char*>(b.data.data()),
-                    b.data.size() * sizeof(float));
+      outFile.write(reinterpret_cast<const char*>(b.data.data()), b.data.size() * sizeof(float));
     }
 
     outFile.close();
@@ -363,9 +376,7 @@ class NeuralNetwork {
     }
 
     size_t arch_size = 0;
-    if (!inputFile.read(reinterpret_cast<char*>(&arch_size),
-                        sizeof(arch_size)) ||
-        arch_size == 0) {
+    if (!inputFile.read(reinterpret_cast<char*>(&arch_size), sizeof(arch_size)) || arch_size == 0) {
       return false;
     }
 
@@ -398,8 +409,7 @@ class NeuralNetwork {
       if (rows != w.rows || cols != w.cols) {
         return false;
       }
-      if (!inputFile.read(reinterpret_cast<char*>(w.data.data()),
-                          w.data.size() * sizeof(float))) {
+      if (!inputFile.read(reinterpret_cast<char*>(w.data.data()), w.data.size() * sizeof(float))) {
         return false;
       }
     }
@@ -414,8 +424,7 @@ class NeuralNetwork {
       if (rows != b.rows || cols != b.cols) {
         return false;
       }
-      if (!inputFile.read(reinterpret_cast<char*>(b.data.data()),
-                          b.data.size() * sizeof(float))) {
+      if (!inputFile.read(reinterpret_cast<char*>(b.data.data()), b.data.size() * sizeof(float))) {
         return false;
       }
     }
@@ -438,19 +447,18 @@ class NeuralNetwork {
     std::cout << "]\n";
   }
 
-  void forward(Activation hidden_act = NN_ACT,
-               Activation output_act = Activation::Sigmoid) {
+  void forward(Activation hidden_act = NN_ACT, Activation output_act = Activation::Sigmoid) {
     for (size_t i = 0; i < ws.size(); i++) {
-      as[i + 1] =
-          Matrix::dot_mt(as[i], ws[i]);  // matrix multiplicaton of weight and as
+      as[i + 1] = Matrix::dot_mt(as[i], ws[i]); // matrix multiplicaton of weight and as
       as[i + 1] += bs[i];
-      zs[i] = as[i + 1];  // save pre-activation values for backprop
+      zs[i] = as[i + 1]; // save pre-activation values for backprop
       Activation layer_act = (i == ws.size() - 1) ? output_act : hidden_act;
       as[i + 1].apply_activation(layer_act);
     }
   }
 
-  float cost(const Matrix& t, Activation hidden_act = NN_ACT,
+  float cost(const Matrix& t,
+             Activation hidden_act = NN_ACT,
              Activation output_act = Activation::Sigmoid) {
     assert(get_input().cols + get_output().cols == t.cols);
     float c = 0.0f;
@@ -471,7 +479,8 @@ class NeuralNetwork {
     return c / n;
   }
 
-  NeuralNetwork backprop(const Matrix& t, Activation hidden_act = NN_ACT,
+  NeuralNetwork backprop(const Matrix& t,
+                         Activation hidden_act = NN_ACT,
                          Activation output_act = Activation::Sigmoid) {
     size_t n = t.rows;
     assert(get_input().cols + get_output().cols == t.cols);
@@ -510,9 +519,8 @@ class NeuralNetwork {
         for (size_t j = 0; j < as[l].cols; ++j) {
           float a = as[l](0, j);
           float da = g.as[l](0, j);
-          float z = zs[l - 1](0, j);  // pre-activation value
-          Activation layer_act =
-              (l == arch.size() - 1) ? output_act : hidden_act;
+          float z = zs[l - 1](0, j); // pre-activation value
+          Activation layer_act = (l == arch.size() - 1) ? output_act : hidden_act;
           float qa = Dactf(a, z, layer_act);
 
           g.bs[l - 1](0, j) += s * da * qa;
@@ -556,8 +564,11 @@ struct Batch {
   float cost = 0.0f;
   bool finished = false;
 
-  void process(size_t batch_size, NeuralNetwork& nn, const Matrix& t,
-               float rate, Activation hidden_act = NN_ACT,
+  void process(size_t batch_size,
+               NeuralNetwork& nn,
+               const Matrix& t,
+               float rate,
+               Activation hidden_act = NN_ACT,
                Activation output_act = Activation::Sigmoid) {
     if (finished) {
       finished = false;
@@ -593,4 +604,4 @@ struct Batch {
   }
 };
 
-}  // namespace nn
+} // namespace nn
