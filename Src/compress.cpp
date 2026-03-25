@@ -1,75 +1,113 @@
 #include "compress.h"
 
-#include <cstddef>
 #include <iostream>
-#include <vector>
 
 #include "../Headers/nn.h"
-#include "decompress.h"
 #include "image_io.h"
+#include "patches.h"
+
+namespace {
+
+nn::Matrix BuildPatchTrainingData(const PatchSet& patch_set) {
+  const size_t patch_dim = static_cast<size_t>(patch_set.patch_size) *
+                           patch_set.patch_size * patch_set.channels;
+  nn::Matrix train_data(patch_set.patches.size(), patch_dim * 2, 0.0f);
+
+  for (size_t patch_idx = 0; patch_idx < patch_set.patches.size(); ++patch_idx) {
+    const auto& patch = patch_set.patches[patch_idx];
+    for (size_t value_idx = 0; value_idx < patch_dim; ++value_idx) {
+      train_data(patch_idx, value_idx) = patch[value_idx];
+      train_data(patch_idx, patch_dim + value_idx) = patch[value_idx];
+    }
+  }
+
+  return train_data;
+}
+
+std::vector<std::vector<float>> DecodePatches(
+    nn::NeuralNetwork& autoencoder, const PatchSet& patch_set,
+    nn::Activation hidden_act, nn::Activation output_act) {
+  const size_t patch_dim = static_cast<size_t>(patch_set.patch_size) *
+                           patch_set.patch_size * patch_set.channels;
+  std::vector<std::vector<float>> decoded_patches(
+      patch_set.patches.size(), std::vector<float>(patch_dim, 0.0f));
+
+  for (size_t patch_idx = 0; patch_idx < patch_set.patches.size(); ++patch_idx) {
+    const auto& patch = patch_set.patches[patch_idx];
+
+    for (size_t value_idx = 0; value_idx < patch_dim; ++value_idx) {
+      autoencoder.get_input()(0, value_idx) = patch[value_idx];
+    }
+
+    autoencoder.forward(hidden_act, output_act);
+
+    for (size_t value_idx = 0; value_idx < patch_dim; ++value_idx) {
+      decoded_patches[patch_idx][value_idx] =
+          autoencoder.get_output()(0, value_idx);
+    }
+  }
+
+  return decoded_patches;
+}
+
+}  // namespace
 
 int RunCompress(const std::string& input_path, const std::string& model_path,
                 const std::string& output_path) {
+  (void)model_path;
+
   Image image;
   if (!LoadImage(input_path, image, 3)) {
     std::cerr << "Error: Could not load " << input_path << "!" << std::endl;
     return 1;
   }
 
-  const int width = image.width;
-  const int height = image.height;
-
   std::cout << "Image loaded successfully!\n";
-  std::cout << "Width: " << width << "px\n";
-  std::cout << "Height: " << height << "px\n";
-  std::cout << "Total Pixels: " << (width * height) << "\n";
+  std::cout << "Width: " << image.width << "px\n";
+  std::cout << "Height: " << image.height << "px\n";
+  std::cout << "Total Pixels: " << (image.width * image.height) << "\n";
 
-  nn::Matrix train_data(width * height, 5, 0.0f);
-  for (size_t j = 0; j < static_cast<size_t>(height); ++j) {
-    for (size_t i = 0; i < static_cast<size_t>(width); ++i) {
-      const size_t row_idx = j * static_cast<size_t>(width) + i;
+  const PatchSet patch_set = ExtractPatches(image, 8, 4);
+  const size_t patch_dim = static_cast<size_t>(patch_set.patch_size) *
+                           patch_set.patch_size * patch_set.channels;
+  std::cout << "Patch autoencoder training...\n";
+  std::cout << "Padded Size: " << patch_set.padded_width << "x"
+            << patch_set.padded_height << "\n";
+  std::cout << "Patch Size: " << patch_set.patch_size
+            << " | Stride: " << patch_set.stride << "\n";
+  std::cout << "Patch Count: " << patch_set.patches.size() << "\n";
+  std::cout << "Patch Dim: " << patch_dim << "\n";
 
-      train_data(row_idx, 0) = static_cast<float>(i) / (width - 1);
-      train_data(row_idx, 1) = static_cast<float>(j) / (height - 1);
-
-      const size_t img_idx = row_idx * 3;
-      train_data(row_idx, 2) = image.pixels[img_idx + 0] / 255.0f;
-      train_data(row_idx, 3) = image.pixels[img_idx + 1] / 255.0f;
-      train_data(row_idx, 4) = image.pixels[img_idx + 2] / 255.0f;
-    }
-  }
-
-  std::vector<size_t> arch = {2, 64, 64, 3};
-  nn::NeuralNetwork compressor(arch);
-  compressor.randomize(-0.5f, 0.5f);
+  const nn::Matrix train_data = BuildPatchTrainingData(patch_set);
+  const std::vector<size_t> arch = {patch_dim, 64, 16, 64, patch_dim};
+  nn::NeuralNetwork autoencoder(arch);
+  autoencoder.randomize(-0.5f, 0.5f);
 
   nn::Batch batch;
-  const size_t epochs = 500;
+  // Keep the first patch-autoencoder pass cheap enough to iterate on.
+  const size_t epochs = 200;
   const float learning_rate = 0.01f;
+  constexpr nn::Activation hidden_act = nn::Activation::Tanh;
+  constexpr nn::Activation output_act = nn::Activation::Sigmoid;
 
-  std::cout << "Starting compression...\n";
-
-  for (size_t i = 0; i < epochs; ++i) {
-    batch.process(train_data.rows, compressor, train_data, learning_rate,
-                  nn::Activation::Relu, nn::Activation::Sigmoid);
-    if (i % 100 == 0) {
-      std::cout << "Epoch: " << i << " | Cost: " << batch.cost << "\n";
+  for (size_t epoch = 0; epoch < epochs; ++epoch) {
+    batch.process(train_data.rows, autoencoder, train_data, learning_rate,
+                  hidden_act, output_act);
+    if (epoch % 25 == 0 || epoch + 1 == epochs) {
+      std::cout << "Epoch: " << epoch << " | Cost: " << batch.cost
+                << std::endl;
     }
   }
 
-  std::cout << "Compression complete!\n";
-
-  if (!compressor.save(model_path)) {
-    std::cerr << "Error: Could not save " << model_path << "!" << std::endl;
-    return 1;
-  }
-
-  const Image output = ReconstructImage(compressor, width, height);
+  const auto decoded_patches =
+      DecodePatches(autoencoder, patch_set, hidden_act, output_act);
+  const Image output = ReconstructFromPatches(patch_set, decoded_patches);
   if (!SavePNG(output_path, output)) {
     std::cerr << "Error: Could not save " << output_path << "!" << std::endl;
     return 1;
   }
 
-  std::cout << "Neural reconstruction saved to " << output_path << "!\n";
+  std::cout << "Patch autoencoder reconstruction saved to " << output_path
+            << "!\n";
   return 0;
 }
