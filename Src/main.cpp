@@ -8,7 +8,7 @@ namespace {
 
 void PrintUsage(const char* program_name) {
   std::cout << "Usage:\n";
-  std::cout << "  " << program_name << " compress [input_image] [output_ninc] [preview_png]\n";
+  std::cout << "  " << program_name << " compress [input_image] [output_ninc]\n";
   std::cout << "  " << program_name << " decompress [input_ninc] [output_png]\n";
 }
 
@@ -16,15 +16,14 @@ void PrintUsage(const char* program_name) {
 
 int main(int argc, char** argv) {
   if (argc == 1) {
-    return RunCompress("test.jpg", "test.ninc", "output.png");
+    return RunCompress("test.jpg", "test.ninc");
   }
 
   const std::string command = argv[1];
   if (command == "compress") {
     const std::string input_path = argc > 2 ? argv[2] : "test.jpg";
     const std::string model_path = argc > 3 ? argv[3] : "test.ninc";
-    const std::string output_path = argc > 4 ? argv[4] : "output.png";
-    return RunCompress(input_path, model_path, output_path);
+    return RunCompress(input_path, model_path);
   }
 
   if (command == "decompress") {

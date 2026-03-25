@@ -1,5 +1,6 @@
 #include "compress.h"
 
+#include <filesystem>
 #include <iostream>
 
 #include "../Headers/nn.h"
@@ -8,9 +9,7 @@
 #include "ninc_format.h"
 #include "patches.h"
 
-int RunCompress(const std::string& input_path,
-                const std::string& model_path,
-                const std::string& output_path) {
+int RunCompress(const std::string& input_path, const std::string& model_path) {
   Image image;
   if (!LoadImage(input_path, image, 3)) {
     std::cerr << "Error: Could not load " << input_path << "!" << std::endl;
@@ -22,7 +21,7 @@ int RunCompress(const std::string& input_path,
   std::cout << "Height: " << image.height << "px\n";
   std::cout << "Total Pixels: " << (image.width * image.height) << "\n";
 
-  const PatchSet patch_set = ExtractPatches(image, 8, 4);
+  const PatchSet patch_set = ExtractPatches(image, 8, 8);
   const size_t patch_dim =
       static_cast<size_t>(patch_set.patch_size) * patch_set.patch_size * patch_set.channels;
   std::cout << "Patch autoencoder training...\n";
@@ -37,14 +36,22 @@ int RunCompress(const std::string& input_path,
   autoencoder.randomize(-0.5f, 0.5f);
 
   nn::Batch batch;
-  const size_t epochs = 500;
+  const size_t epochs = 200;
   const float learning_rate = 0.005f;
   constexpr nn::Activation hidden_act = nn::Activation::Tanh;
   constexpr nn::Activation output_act = nn::Activation::Sigmoid;
+  constexpr size_t log_interval = 25;
 
   for (size_t epoch = 0; epoch < epochs; ++epoch) {
-    batch.process(train_data.rows, autoencoder, train_data, learning_rate, hidden_act, output_act);
-    if (epoch % 25 == 0 || epoch + 1 == epochs) {
+    const bool should_log = (epoch % log_interval == 0) || (epoch + 1 == epochs);
+    batch.process(train_data.rows,
+                  autoencoder,
+                  train_data,
+                  learning_rate,
+                  should_log,
+                  hidden_act,
+                  output_act);
+    if (should_log) {
       std::cout << "Epoch: " << epoch << " | Cost: " << batch.cost << std::endl;
     }
   }
@@ -59,16 +66,13 @@ int RunCompress(const std::string& input_path,
     return 1;
   }
 
-  nn::NeuralNetwork preview_decoder = decoder;
-  const PatchList decoded_patches =
-      DecodeLatentCodes(preview_decoder, latent_codes, patch_dim, hidden_act, output_act);
-  const Image output = ReconstructFromPatches(patch_set, decoded_patches);
-  if (!SavePNG(output_path, output)) {
-    std::cerr << "Error: Could not save " << output_path << "!" << std::endl;
-    return 1;
-  }
+  const size_t raw_size = static_cast<size_t>(image.width) * image.height * image.channels;
+  const auto ninc_size = std::filesystem::file_size(model_path);
+  std::cout << "\n--- Compression Stats ---\n";
+  std::cout << "Raw image: " << raw_size << " bytes\n";
+  std::cout << "Compressed: " << ninc_size << " bytes\n";
+  std::cout << "Ratio: " << static_cast<float>(raw_size) / ninc_size << "x\n";
+  std::cout << "Saved to " << model_path << "\n";
 
-  std::cout << "Saved compressed model to " << model_path << "!\n";
-  std::cout << "Patch autoencoder reconstruction saved to " << output_path << "!\n";
   return 0;
 }

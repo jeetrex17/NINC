@@ -145,6 +145,12 @@ public:
   //  A faster version of dot() that uses std::thread
   static Matrix dot_mt(const Matrix& a, const Matrix& b) {
     assert(a.cols == b.rows);
+
+    const size_t work = a.rows * a.cols * b.cols;
+    if (a.rows <= 1 || work < 16384) {
+      return dot(a, b);
+    }
+
     Matrix dst(a.rows, b.cols, 0.0f);
 
     unsigned int num_threads = std::thread::hardware_concurrency();
@@ -568,6 +574,7 @@ struct Batch {
                NeuralNetwork& nn,
                const Matrix& t,
                float rate,
+               bool compute_cost = true,
                Activation hidden_act = NN_ACT,
                Activation output_act = Activation::Sigmoid) {
     if (finished) {
@@ -593,12 +600,16 @@ struct Batch {
 
     NeuralNetwork g = nn.backprop(batch_t, hidden_act, output_act);
     nn.learn(g, rate);
-    cost += nn.cost(batch_t, hidden_act, output_act);
+    if (compute_cost) {
+      cost += nn.cost(batch_t, hidden_act, output_act);
+    }
     begin += batch_size;
 
     if (begin >= t.rows) {
-      size_t batch_count = (t.rows + batch_size - 1) / batch_size;
-      cost /= batch_count;
+      if (compute_cost) {
+        size_t batch_count = (t.rows + batch_size - 1) / batch_size;
+        cost /= batch_count;
+      }
       finished = true;
     }
   }

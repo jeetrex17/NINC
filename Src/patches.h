@@ -13,7 +13,7 @@ struct PatchSet {
   int padded_width = 0;
   int padded_height = 0;
   int patch_size = 8;
-  int stride = 4;
+  int stride = 8;
   int channels = 3;
 
   PatchList patches;
@@ -22,6 +22,6 @@ struct PatchSet {
 };
 
 PatchSet BuildPatchLayout(
-    int original_width, int original_height, int patch_size = 8, int stride = 4, int channels = 3);
-PatchSet ExtractPatches(const Image& image, int patch_size = 8, int stride = 4);
+    int original_width, int original_height, int patch_size = 8, int stride = 8, int channels = 3);
+PatchSet ExtractPatches(const Image& image, int patch_size = 8, int stride = 8);
 Image ReconstructFromPatches(const PatchSet& patch_set, const PatchList& decoded_patches);
