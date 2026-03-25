@@ -1,30 +1,45 @@
 #include "decompress.h"
 
-#include <cstddef>
+#include <iostream>
 
-Image ReconstructImage(nn::NeuralNetwork& compressor, int width, int height) {
-  Image output;
-  output.width = width;
-  output.height = height;
-  output.channels = 3;
-  output.pixels.resize(static_cast<size_t>(width) * height * output.channels);
+#include "codec.h"
+#include "image_io.h"
+#include "ninc_format.h"
+#include "patches.h"
 
-  for (size_t j = 0; j < static_cast<size_t>(height); ++j) {
-    for (size_t i = 0; i < static_cast<size_t>(width); ++i) {
-      compressor.get_input()(0, 0) = static_cast<float>(i) / (width - 1);
-      compressor.get_input()(0, 1) = static_cast<float>(j) / (height - 1);
-
-      compressor.forward(nn::Activation::Relu, nn::Activation::Sigmoid);
-
-      const size_t img_idx = (j * static_cast<size_t>(width) + i) * 3;
-      output.pixels[img_idx + 0] =
-          static_cast<unsigned char>(compressor.get_output()(0, 0) * 255.0f);
-      output.pixels[img_idx + 1] =
-          static_cast<unsigned char>(compressor.get_output()(0, 1) * 255.0f);
-      output.pixels[img_idx + 2] =
-          static_cast<unsigned char>(compressor.get_output()(0, 2) * 255.0f);
-    }
+int RunDecompress(const std::string& model_path, const std::string& output_path) {
+  NincData data;
+  if (!LoadNinc(model_path, data)) {
+    std::cerr << "Error: Could not load " << model_path << "!" << std::endl;
+    return 1;
   }
 
-  return output;
+  PatchSet patch_set = BuildPatchLayout(
+      data.original_width, data.original_height, data.patch_size, data.stride, data.channels);
+  if (patch_set.padded_width != data.padded_width ||
+      patch_set.padded_height != data.padded_height) {
+    std::cerr << "Error: Saved patch layout does not match expected padded dimensions."
+              << std::endl;
+    return 1;
+  }
+
+  if (patch_set.xs.size() != data.latent_codes.size()) {
+    std::cerr << "Error: Latent code count does not match patch layout." << std::endl;
+    return 1;
+  }
+
+  nn::NeuralNetwork decoder = BuildDecoderNetwork(data);
+  const size_t patch_dim =
+      static_cast<size_t>(patch_set.patch_size) * patch_set.patch_size * patch_set.channels;
+  const PatchList decoded_patches =
+      DecodeLatentCodes(decoder, data.latent_codes, patch_dim, data.hidden_act, data.output_act);
+  const Image output = ReconstructFromPatches(patch_set, decoded_patches);
+  if (!SavePNG(output_path, output)) {
+    std::cerr << "Error: Could not save " << output_path << "!" << std::endl;
+    return 1;
+  }
+
+  std::cout << "Loaded compressed model from " << model_path << "!\n";
+  std::cout << "Decompressed image saved to " << output_path << "!\n";
+  return 0;
 }

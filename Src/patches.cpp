@@ -40,23 +40,39 @@ size_t FlatPatchIndex(int px, int py, int channel, int patch_size, int channels)
 
 } // namespace
 
-PatchSet ExtractPatches(const Image& image, int patch_size, int stride) {
-  assert(image.channels == 3);
-
+PatchSet BuildPatchLayout(
+    int original_width, int original_height, int patch_size, int stride, int channels) {
   PatchSet patch_set;
-  patch_set.original_width = image.width;
-  patch_set.original_height = image.height;
+  patch_set.original_width = original_width;
+  patch_set.original_height = original_height;
   patch_set.patch_size = patch_size;
   patch_set.stride = stride;
-  patch_set.channels = image.channels;
-  patch_set.padded_width = ComputePaddedDim(image.width, patch_size, stride);
-  patch_set.padded_height = ComputePaddedDim(image.height, patch_size, stride);
-
-  const Image padded = CreatePaddedImage(image, patch_set.padded_width, patch_set.padded_height);
+  patch_set.channels = channels;
+  patch_set.padded_width = ComputePaddedDim(original_width, patch_size, stride);
+  patch_set.padded_height = ComputePaddedDim(original_height, patch_size, stride);
 
   for (int y = 0; y <= patch_set.padded_height - patch_size; y += stride) {
     for (int x = 0; x <= patch_set.padded_width - patch_size; x += stride) {
-      std::vector<float> patch(static_cast<size_t>(patch_size) * patch_size * image.channels, 0.0f);
+      patch_set.xs.push_back(x);
+      patch_set.ys.push_back(y);
+    }
+  }
+
+  return patch_set;
+}
+
+PatchSet ExtractPatches(const Image& image, int patch_size, int stride) {
+  assert(image.channels == 3);
+
+  PatchSet patch_set =
+      BuildPatchLayout(image.width, image.height, patch_size, stride, image.channels);
+
+  const Image padded = CreatePaddedImage(image, patch_set.padded_width, patch_set.padded_height);
+  patch_set.patches.reserve(patch_set.xs.size());
+
+  for (int y = 0; y <= patch_set.padded_height - patch_size; y += stride) {
+    for (int x = 0; x <= patch_set.padded_width - patch_size; x += stride) {
+      Patch patch(static_cast<size_t>(patch_size) * patch_size * image.channels, 0.0f);
 
       for (int py = 0; py < patch_size; ++py) {
         for (int px = 0; px < patch_size; ++px) {
@@ -68,9 +84,6 @@ PatchSet ExtractPatches(const Image& image, int patch_size, int stride) {
           }
         }
       }
-
-      patch_set.xs.push_back(x);
-      patch_set.ys.push_back(y);
       patch_set.patches.push_back(std::move(patch));
     }
   }
@@ -78,9 +91,9 @@ PatchSet ExtractPatches(const Image& image, int patch_size, int stride) {
   return patch_set;
 }
 
-Image ReconstructFromPatches(const PatchSet& patch_set,
-                             const std::vector<std::vector<float>>& decoded_patches) {
-  assert(decoded_patches.size() == patch_set.patches.size());
+Image ReconstructFromPatches(const PatchSet& patch_set, const PatchList& decoded_patches) {
+  assert(patch_set.xs.size() == patch_set.ys.size());
+  assert(decoded_patches.size() == patch_set.xs.size());
 
   const size_t padded_pixel_count =
       static_cast<size_t>(patch_set.padded_width) * patch_set.padded_height;

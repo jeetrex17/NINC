@@ -1,6 +1,5 @@
 #pragma once
 
-#include "../Headers/nn.h"
-#include "image_io.h"
+#include <string>
 
-Image ReconstructImage(nn::NeuralNetwork& compressor, int width, int height);
+int RunDecompress(const std::string& model_path, const std::string& output_path);
